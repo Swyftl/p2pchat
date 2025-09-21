@@ -40,7 +40,7 @@ namespace P2PChat
             {
                 try
                 {
-                    var msg = $"P2PCHAT|{_tcpPort}|{_localUser.Id}|{_localUser.Name}";
+                    var msg = $"P2PCHAT|{_tcpPort}|{_localUser.Id}"; // no name
                     var data = Encoding.UTF8.GetBytes(msg);
                     await udp.SendAsync(data, data.Length, new IPEndPoint(IPAddress.Broadcast, _udpPort));
                 }
@@ -64,25 +64,17 @@ namespace P2PChat
                     if (!text.StartsWith("P2PCHAT|")) continue;
 
                     var parts = text.Split('|');
-                    if (parts.Length < 4) continue;
+                    if (parts.Length < 3) continue;
 
                     int peerTcpPort = int.Parse(parts[1]);
                     string peerId = parts[2];
-                    string peerName = parts[3];
 
-                    // ignore self
                     if (peerId == _localUser.Id) continue;
+                    if (_peerManager.HasPeer(peerId)) continue;
+                    if (string.Compare(_localUser.Id, peerId, StringComparison.Ordinal) > 0) continue;
 
                     string peerIp = result.RemoteEndPoint.Address.ToString();
 
-                    // ignore if already connected
-                    if (_peerManager.HasPeer(peerId)) continue;
-
-                    // Only connect if local ID is smaller
-                    if (string.Compare(_localUser.Id, peerId, StringComparison.Ordinal) > 0)
-                        continue;
-
-                    // connect via TCP
                     _ = Task.Run(async () =>
                     {
                         for (int i = 0; i < 3; i++)
@@ -92,13 +84,11 @@ namespace P2PChat
                                 var client = new TcpClient();
                                 await client.ConnectAsync(peerIp, peerTcpPort);
 
-                                var peerUser = new User { Id = peerId, Name = peerName, EndPoint = $"{peerIp}:{peerTcpPort}" };
+                                var peerUser = new User { Id = peerId, EndPoint = $"{peerIp}:{peerTcpPort}" };
                                 var connection = new PeerConnection(peerUser, client);
-                                await connection.InitAsync(); // handshake
-
+                                await connection.InitAsync(_localUser.Name); // handshake
                                 _peerManager.AddPeer(connection);
 
-                                // receive loop
                                 while (true)
                                 {
                                     var msg = await connection.ReceiveAsync();
@@ -107,7 +97,7 @@ namespace P2PChat
                                 }
 
                                 _peerManager.RemovePeer(peerId);
-                                break; // connected
+                                break;
                             }
                             catch
                             {

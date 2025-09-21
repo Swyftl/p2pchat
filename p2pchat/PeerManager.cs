@@ -33,7 +33,7 @@ namespace P2PChat
                 {
                     await conn.SendAsync(msg.ToString());
                 }
-                catch { /* ignore errors */ }
+                catch { }
             }
             Console.WriteLine(msg.ToString()); // also show locally
         }

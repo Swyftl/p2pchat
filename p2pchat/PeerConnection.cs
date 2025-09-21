@@ -1,4 +1,5 @@
-﻿using System.IO;
+﻿using System;
+using System.IO;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
@@ -12,6 +13,9 @@ namespace P2PChat
         private readonly StreamReader _reader;
         private readonly StreamWriter _writer;
 
+        // Event triggered when the peer disconnects
+        public event Action<PeerConnection>? OnDisconnected;
+
         public PeerConnection(User peer, TcpClient client)
         {
             Peer = peer;
@@ -22,30 +26,66 @@ namespace P2PChat
             _writer = new StreamWriter(ns, Encoding.UTF8) { AutoFlush = true };
         }
 
-        // Simple handshake: exchange names
-        public async Task InitAsync()
+        // TCP handshake: send local name, receive remote name
+        public async Task InitAsync(string localName)
         {
-            // Send local name
-            await _writer.WriteLineAsync(Peer.Name);
+            // send local name
+            await _writer.WriteLineAsync(localName);
 
-            // Read remote name
+            // read remote name
             var remoteName = await _reader.ReadLineAsync();
             if (!string.IsNullOrWhiteSpace(remoteName))
-            {
                 Peer.Name = remoteName.Trim();
+        }
+
+        // Send a message to this peer
+        public async Task SendAsync(string message)
+        {
+            try
+            {
+                await _writer.WriteLineAsync(message);
+            }
+            catch
+            {
+                TriggerDisconnect();
             }
         }
 
-        public async Task SendAsync(string message)
-        {
-            await _writer.WriteLineAsync(message);
-        }
-
+        // Receive a message; triggers OnDisconnected if stream closes
         public async Task<string?> ReceiveAsync()
         {
-            return await _reader.ReadLineAsync();
+            try
+            {
+                var line = await _reader.ReadLineAsync();
+                if (line == null)
+                {
+                    TriggerDisconnect();
+                    return null;
+                }
+                return line;
+            }
+            catch
+            {
+                TriggerDisconnect();
+                return null;
+            }
         }
 
-        public void Close() => _client.Close();
+        // Close the TCP connection
+        public void Close()
+        {
+            try
+            {
+                _client.Close();
+            }
+            catch { }
+            TriggerDisconnect();
+        }
+
+        private void TriggerDisconnect()
+        {
+            OnDisconnected?.Invoke(this);
+            OnDisconnected = null; // ensure it only fires once
+        }
     }
 }
