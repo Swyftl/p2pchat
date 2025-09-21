@@ -21,11 +21,9 @@ namespace P2PChat
 
         public async Task RunAsync()
         {
-            // Start TCP listener
             var listenerService = new TcpListenerService(_listenPort, _peers, _localUser);
             _ = listenerService.StartAsync();
 
-            // Start UDP discovery
             _discovery = new UdpDiscoveryService(_udpPort, _listenPort, _localUser, _peers);
             _discovery.Start();
 
@@ -86,12 +84,10 @@ namespace P2PChat
                 var client = new TcpClient();
                 await client.ConnectAsync(IPAddress.Parse(ip), port);
 
-                var peerUser = new User { Name = _localUser.Name, EndPoint = $"{ip}:{port}" };
+                var peerUser = new User { EndPoint = $"{ip}:{port}" };
                 var connection = new PeerConnection(peerUser, client);
-                await connection.InitAsync(); // handshake for name exchange
+                await connection.InitAsync(_localUser.Name); // TCP handshake
                 _peers.AddPeer(connection);
-
-                Console.WriteLine($"{connection.Peer.Name} connected.");
 
                 // Start receiving messages
                 _ = Task.Run(async () =>

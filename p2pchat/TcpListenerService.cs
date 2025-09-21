@@ -36,15 +36,12 @@ namespace P2PChat
             try
             {
                 var endpoint = client.Client.RemoteEndPoint?.ToString() ?? "unknown";
-                var peerUser = new User { Name = _localUser.Name, EndPoint = endpoint };
+                var peerUser = new User { EndPoint = endpoint };
                 var connection = new PeerConnection(peerUser, client);
 
-                // handshake
-                await connection.InitAsync();
-
+                await connection.InitAsync(_localUser.Name); // handshake
                 _peerManager.AddPeer(connection);
 
-                // receive loop
                 while (true)
                 {
                     var msg = await connection.ReceiveAsync();
